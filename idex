@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🍄 Kovaze Mushroom Hunt Live Links</title>
+    <meta charset="utf-8">
+    <style>
+        body {font-family: Arial; background: #111; color: #0f0; padding: 30px; text-align: center;}
+        h1 {font-size: 3em;}
+        .links {margin: 40px; font-size: 1.5em;}
+        a {color: #0f0; display: block; margin: 15px; text-decoration: underline;}
+        .refresh {color: yellow; font-size: 1.2em;}
+    </style>
+    <script>
+        setInterval(() => location.reload(), 20000); // auto-refresh every 20s
+        fetch('links.txt?' + Date.now()).then(r => r.text()).then(text => {
+            if (text.trim()) {
+                document.getElementById('links').innerHTML = text.trim().split('\n')
+                    .map(l => `<a href="${l}" target="_blank">🍄 ${l}</a>`).join('<br>');
+                document.getElementById('count').innerText = 'MUSHROOMS FOUND: ' + text.trim().split('\n').length;
+                new Audio('https://assets.mixkit.co/sfx/preview/mixkit-arcade-game-jump-coin-216.mp3').play();
+            }
+        });
+    </script>
+</head>
+<body>
+    <h1>🍄 KOVAZE MUSHROOM HUNT</h1>
+    <p class="refresh">Auto-refreshes every 20s + sound on new finds</p>
+    <p id="count" style="color:yellow;font-weight:bold;">Loading...</p>
+    <div id="links" class="links">Scanning 25,000 blogs...</div>
+</body>
+</html>
