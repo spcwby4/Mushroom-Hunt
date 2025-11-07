@@ -1,30 +1,43 @@
-# kovaze_mushroom_hunter_onefile.py
-# ONE-FILE VERSION - JUST SAVE & RUN!
-# Copy everything below into a file named kovaze_mushroom_hunter.py
-# Then: pip install aiohttp beautifulsoup4 && python kovaze_mushroom_hunter.py
+# mushroom_hunter_noauto.py
+# ONE FILE - NO AUTO-OPEN, NO AUTO-COLLECT
+# Just prints clickable HTML links in a mini web server
+# Open http://localhost:8000 in your browser and refresh!
 
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
-import webbrowser
 import time
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import threading
-import tkinter as tk
-from tkinter import messagebox
 
-# ==================== CONFIG ====================
+# CONFIG
 START_ID = 1
 END_ID = 25000
-CHECK_INTERVAL = 45  # seconds between full scans
-# ===============================================
+CHECK_INTERVAL = 45
+PORT = 8000
 
-def notify(title, msg):
-    root = tk.Tk()
-    root.withdraw()
-    messagebox.showwarning(title, msg)
-    root.destroy()
-    print("\a" * 15)  # LOUD ALERT
-    print(f"🍄🍄🍄 {title}: {msg}")
+found_links = []
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+        
+        html = """
+        <html><head><title>Kovaze Mushroom Hunt - Live Links</title>
+        <meta http-equiv="refresh" content="30">
+        <style>body{font-family:Arial;background:#111;color:#0f0;padding:20px;}
+        a{color:#0f0;font-size:18px;margin:10px;display:block;}</style></head>
+        <body><h1>🍄 REAL MUSHROOMS FOUND (click to collect)</h1>
+        """
+        if found_links:
+            for link in found_links:
+                html += f'<a href="{link}" target="_blank">{link} 🍄</a><br>'
+        else:
+            html += "<p>No mushrooms yet - scanning...</p>"
+        html += f"<p>Last scan: {time.strftime('%H:%M:%S')}</p></body></html>"
+        self.wfile.write(html.encode())
 
 async def fetch(session, url):
     try:
@@ -39,62 +52,65 @@ async def check_blog(session, blog_id):
     html, final_url = await fetch(session, url)
     if not html:
         return None
-
-    # SKIP DELETED BLOGS
     if 'kovaze.com/blogs' in final_url or 'LATEST BLOGS' in html.upper():
         return None
 
     soup = BeautifulSoup(html, 'html.parser')
-
-    # REAL CLICKABLE MUSHROOM ONLY
     for a in soup.find_all('a', href='/events/mushrooms'):
         if a.get_text(strip=True) == '🍄':
-            # Not in Games section
-            parent = a.find_parent(string=lambda t: t and 'Games' in t)
-            if parent:
+            if a.find_parent(string=lambda t: t and 'Games' in t):
                 continue
             return url
     return None
 
 async def hunt():
-    print("🍄 KOVAZE MUSHROOM HUNTER - ONE FILE EDITION")
-    print(f"   Scanning blogs {START_ID}-{END_ID} every {CHECK_INTERVAL}s")
-    print("   → Skips deleted blogs")
-    print("   → GUI popup + sound + auto-open")
-    print("   → ONLY real clickable 🍄\n")
+    global found_links
+    print("🍄 MUSHROOM HUNTER - LINKS ONLY MODE")
+    print(f"   Open http://localhost:{PORT} in your browser")
+    print("   Page auto-refreshes every 30s")
+    print("   Click any green link to open blog & collect manually\n")
     
     seen = set()
 
     while True:
-        print(f"[{time.strftime('%H:%M:%S')}] Starting scan...")
+        print(f"[{time.strftime('%H:%M:%S')}] Scanning {END_ID:,} blogs...")
         start = time.time()
+        new_found = []
         
         async with aiohttp.ClientSession() as session:
             tasks = []
             for i in range(START_ID, END_ID + 1):
                 tasks.append(check_blog(session, i))
-                if len(tasks) >= 600:  # batch for speed
+                if len(tasks) >= 600:
                     results = await asyncio.gather(*tasks)
                     for url in results:
                         if url and url not in seen:
                             seen.add(url)
-                            threading.Thread(target=notify, args=("MUSHROOM FOUND!", f"CLICK NOW → {url}")).start()
-                            webbrowser.open(url)
+                            new_found.append(url)
                     tasks = []
-            # final batch
             if tasks:
                 results = await asyncio.gather(*tasks)
                 for url in results:
                     if url and url not in seen:
                         seen.add(url)
-                        threading.Thread(target=notify, args=("MUSHROOM FOUND!", f"CLICK NOW → {url}")).start()
-                        webbrowser.open(url)
+                        new_found.append(url)
 
-        print(f"Scan finished in {time.time()-start:.1f}s. Next in {CHECK_INTERVAL}s...\n")
+        if new_found:
+            found_links = new_found + found_links[:50]  # keep latest
+            print(f"🍄 {len(new_found)} NEW MUSHROOMS! Total active: {len(found_links)}")
+            print("\a" * 10)  # loud beep
+        else:
+            print("   No new mushrooms this scan.")
+
+        print(f"Scan done in {time.time()-start:.1f}s. Next in {CHECK_INTERVAL}s...\n")
         await asyncio.sleep(CHECK_INTERVAL)
 
 if __name__ == "__main__":
+    # Start web server
+    server = HTTPServer(('localhost', PORT), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    
     try:
         asyncio.run(hunt())
     except KeyboardInterrupt:
-        print("\n🍄 Hunter stopped. Go get that Pink Mycena! 🩷")
+        print("\n🍄 Stopped. Refresh http://localhost:8000 to see links!")
